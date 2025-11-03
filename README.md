@@ -1,3 +1,83 @@
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        User Upload                          │
+│                    (Multiple PDF Files)                      │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   FastAPI Server                            │
+│              POST /process-claim endpoint                    │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Orchestrator Agent                         │
+│           (Coordinates entire workflow)                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        │             │             │
+        ▼             ▼             ▼
+┌─────────────┐ ┌──────────┐ ┌──────────────┐
+│   Extract   │ │ Classify │ │   Process    │
+│   Text      │ │ Document │ │   by Type    │
+│             │ │          │ │              │
+│ pdfplumber  │ │ Pattern  │ │ Bill/        │
+│ + Gemini    │ │ Match +  │ │ Discharge/   │
+│ Vision OCR  │ │ Gemini   │ │ ID Card      │
+│             │ │ LLM      │ │ (Gemini LLM) │
+└─────────────┘ └──────────┘ └──────────────┘
+        │             │             │
+        └─────────────┼─────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Validator Agent                            │
+│         (Check completeness & consistency)                  │
+│                   (Gemini LLM)                              │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Structured JSON Response                    │
+│   - Extracted documents with structured data                │
+│   - Validation results                                      │
+│   - Claim decision (approved/rejected/pending)              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Components
+
+### 1. **FastAPI Server** (`app/main.py`)
+- **REST API Endpoint:** `POST /process-claim`
+- **Input:** Multiple PDF files (multipart/form-data)
+- **Output:** Structured JSON with extracted data and validation
+- **Features:** CORS enabled, health check endpoint, Swagger documentation
+
+### 2. **Orchestrator** (`app/services/orchestrator.py`)
+- **Role:** Coordinates all agents and manages workflow
+- **Process Flow:**
+  1. Receives uploaded PDF files
+  2. Extracts text from each PDF
+  3. Classifies document type
+  4. Routes to appropriate processor agent
+  5. Aggregates all processed documents
+  6. Validates completeness and consistency
+  7. Returns structured response
+
+### 3. **PDF Text Extraction** (`app/utils/pdf_utils.py`)
+- **Text PDFs:** Uses `pdfplumber` for direct text extraction
+- **Image PDFs (Scanned):** Uses Gemini Vision API for OCR
+- **Smart Fallback:** Automatically detects low text extraction and switches to Vision API
+- **Performance:** Converts PDF pages to images at 200 DPI for optimal OCR
+
+
+
 ## Technology Stack
 
 - **Framework:** FastAPI
@@ -40,8 +120,6 @@ Swagger UI: `http://localhost:8000/docs`
 ---
 
 ## Testing
-
-### Test with Python Script
 
 import requests
 
